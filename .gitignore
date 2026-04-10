@@ -1,0 +1,45 @@
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environments
+.env
+.venv/
+venv/
+ENV/
+env/
+
+# Conda
+.conda/
+conda-bld/
+
+# Editors
+.idea/
+.vscode/
+
+# Logs & temp
+*.log
+*.tmp
+tmp/
+logs/
+
+# Pipeline outputs (common)
+results/
+output/
+outputs/
+work/
+scratch/

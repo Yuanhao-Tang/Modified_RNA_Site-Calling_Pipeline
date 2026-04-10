@@ -1,0 +1,19 @@
+name: rnamod-pipeline
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pyyaml
+  - pandas
+  - pysam
+  - bowtie2
+  - star
+  - samtools
+  - umi_tools
+  - rsem
+  - pip
+  - pip:
+      # Reserved for custom Python packages

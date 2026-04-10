@@ -1,0 +1,79 @@
+# ========== Global Settings ==========
+global:
+  work_dir: /path/to/workdir        # Working directory
+  threads: 8                        # Thread count per sample
+  keep_intermediate: false          # Keep intermediate files
+
+# ========== Sample Inputs ==========
+# Input: single-end FASTQ with UMI information already extracted into read names
+samples:
+  sample1:
+    fastq: /path/to/sample1.fq.gz
+  sample2:
+    fastq: /path/to/sample2.fq.gz
+
+# ========== Alignment Settings ==========
+alignment:
+  mode: star                        # Alignment mode (currently only star is implemented)
+  
+  stages:                           # Multi-stage alignment
+    - name: sncRNA                  # First stage: small RNA
+      aligner: bowtie2              # bowtie2 or star
+      index: /ref/sncRNA/bowtie_index
+      fasta: /ref/sncRNA/sncRNA.fa  # Required: used for motif extraction from the reference sequence
+      gtf: /ref/sncRNA.gtf          # Optional: only needed when featureCounts is enabled
+      params:
+        bowtie2: "--local -L 16 -N 1 --mp 4"
+      keep_unmapped: true           # Pass unmapped reads to the next stage
+      
+    - name: mRNA                    # Second stage: mRNA
+      aligner: star
+      index: /ref/mRNA/STAR_index
+      fasta: /ref/Homo_sapiens.GRCh38.fa  # For Gloriseq, utils/convert_base.py can be used for A-to-G conversion
+      gtf: /ref/Homo_sapiens.GRCh38.113.gtf
+      params:
+        star: "--alignEndsType Local --outFilterMismatchNmax 10"
+      keep_unmapped: false          # Not needed for the final stage
+
+# ========== UMI Deduplication ==========
+# Note: input FASTQ files are expected to already contain UMI tags in read names
+umi_dedup:
+  enable: false                     # Enable UMI deduplication
+  tool: umi_tools                   # umi_tools or umiCollapse
+  method: directional               # directional / adjacency / cluster
+  edit_distance: 1
+
+# ========== Modification Calling ==========
+modification:
+  type: puMseq                      # puMseq / Gloriseq / Limeseq
+  min_depth: 10                     # Minimum sequencing depth
+  min_modification_freq: 0.05       # Minimum modification frequency (5%)
+  
+  # Rule summaries for documentation only; actual logic is implemented in utils/extract_modification_sites.py
+  rules:
+    puMseq:
+      ref_base: "T"                 # Reference sites are T
+      mod_base: "C"                 # T-to-C conversion
+      description: "Pseudouridine: modified U read as C"
+    
+    Gloriseq:
+      ref_base: "A"                 # Reference sites are A
+      mod_base: "G"                 # A-to-G conversion for unmodified bases
+      description: "m6A: unmethylated A converted to G"
+      # If you want to use a converted reference genome (A->G), run this before building the index:
+      # python utils/convert_base.py input.fa output.fa A G
+    
+    Limeseq:
+      ref_bases: ["A", "C", "G", "T"]
+      description: "Multiple modifications: all high-depth sites"
+
+# ========== Motif Extraction ==========
+motif:
+  enable: true
+  upstream: 3                       # Bases upstream of the modified site
+  downstream: 2                     # Bases downstream of the modified site (6 bp motif in total)
+
+# ========== BAM To FASTQ Export ==========
+fastq_export:
+  enable: true                      # Export FASTQ files
+  output_dir: fastq                 # Output subdirectory under each sample directory

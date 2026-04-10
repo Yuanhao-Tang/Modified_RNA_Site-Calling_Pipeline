@@ -1,0 +1,49 @@
+# Parallel STAR pipeline example (multi-sample)
+
+global:
+  work_dir: /data/projects/rnamod_demo
+  threads: 8
+  keep_intermediate: false
+
+samples:
+  sample1:
+    fastq: /data/fastq/sample1.fq.gz
+  sample2:
+    fastq: /data/fastq/sample2.fq.gz
+  sample3:
+    fastq: /data/fastq/sample3.fq.gz
+
+alignment:
+  mode: star
+  stages:
+    - name: sncRNA
+      aligner: bowtie2
+      index: /data/index/bowtie2/sncRNA
+      fasta: /data/reference/sncRNA.fa
+      params:
+        bowtie2: "--local -L 16 -N 1 --mp 4"
+      keep_unmapped: true
+    - name: mRNA
+      aligner: star
+      index: /data/index/STAR/hg38
+      fasta: /data/reference/hg38.fa
+      params:
+        star: "--alignEndsType Local --outFilterMismatchNmax 10"
+      keep_unmapped: false
+
+umi_dedup:
+  enable: false
+
+modification:
+  type: puMseq
+  min_depth: 10
+  min_modification_freq: 0.05
+
+motif:
+  enable: true
+  upstream: 3
+  downstream: 2
+
+fastq_export:
+  enable: true
+  output_dir: fastq

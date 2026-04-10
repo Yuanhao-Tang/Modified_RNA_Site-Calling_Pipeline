@@ -1,0 +1,21 @@
+# ========== Standalone RSEM Example ==========
+
+global:
+  threads: 8
+
+samples:
+  sample1:
+    fastq: /path/to/sample1.fq.gz          # Single-end FASTQ
+  sample2:
+    fastq:
+      - /path/to/sample2_R1.fq.gz          # Paired-end FASTQ (R1)
+      - /path/to/sample2_R2.fq.gz          # Paired-end FASTQ (R2)
+
+rsem:
+  work_dir: /path/to/rsem_workdir          # RSEM output directory
+  index: /ref/rsem_index/human             # RSEM reference prefix
+  params: "--calc-ci --calc-pme"           # Optional extra parameters
+  threads: 8                               # Overrides global.threads if provided
+
+
+

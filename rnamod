@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""
+RNA Modification Analysis Pipeline - main entry point.
+"""
+import argparse
+import sys
+from pathlib import Path
+import yaml
+from multiprocessing import Pool
+
+
+def main():
+    # Add the project root to sys.path so the tool can run from any directory.
+    # Use __file__ to resolve the script location in a portable way.
+    project_root = Path(__file__).parent.absolute()
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    parser = argparse.ArgumentParser(
+        description='RNA Modification Sequencing Analysis',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:
+"
+            "  # Run all samples
+"
+            "  rnamod -c config.yaml
+
+"
+            "  # Run one specific sample
+"
+            "  rnamod -c config.yaml -s sample1
+
+"
+            "  # Run four jobs in parallel
+"
+            "  rnamod -c config.yaml -j 4
+
+"
+            "  # Dry-run mode
+"
+            "  rnamod -c config.yaml --dry-run
+"
+        )
+    )
+    parser.add_argument('-c', '--config', required=True, help='Config YAML file')
+    parser.add_argument('-s', '--sample', help='Run a specific sample (default: all)')
+    parser.add_argument('-j', '--jobs', type=int, default=1, help='Parallel jobs (default: 1)')
+    parser.add_argument('--dry-run', action='store_true', help='Print commands without execution')
+    args = parser.parse_args()
+
+    with open(args.config) as f:
+        config = yaml.safe_load(f)
+
+    from lib.config_parser import validate_config
+    validate_config(config, allow_missing_files=args.dry_run)
+
+    if args.sample:
+        if args.sample not in config['samples']:
+            print(f"[ERROR] Sample '{args.sample}' is not defined in the configuration", file=sys.stderr)
+            sys.exit(1)
+        samples = [args.sample]
+    else:
+        samples = list(config['samples'].keys())
+
+    print(f"
+{'='*60}")
+    print(f"Starting {len(samples)} sample(s)")
+    print(f"{'='*60}
+")
+
+    failed_samples = []
+
+    if args.jobs > 1 and len(samples) > 1:
+        print(f"[INFO] Processing samples with {args.jobs} parallel workers
+")
+        with Pool(args.jobs) as pool:
+            results = pool.starmap(run_sample, [(s, config, args.dry_run) for s in samples])
+            for sample, success in zip(samples, results):
+                if not success:
+                    failed_samples.append(sample)
+    else:
+        if args.jobs > 1 and len(samples) == 1:
+            print("[INFO] Only one sample was requested, so serial execution will be used
+")
+        for sample in samples:
+            success = run_sample(sample, config, args.dry_run)
+            if not success:
+                failed_samples.append(sample)
+
+    if failed_samples:
+        print(f'
+[ERROR] Failed samples: {", ".join(failed_samples)}', file=sys.stderr)
+        print(f'[ERROR] {len(failed_samples)}/{len(samples)} samples failed', file=sys.stderr)
+        sys.exit(1)
+    else:
+        print('
+[OK] All samples completed successfully')
+
+        if not args.dry_run:
+            try:
+                work_dir = Path(config['global']['work_dir'])
+                summary_file = work_dir / 'coverage_summary.csv'
+
+                project_root = Path(__file__).parent
+                if str(project_root) not in sys.path:
+                    sys.path.insert(0, str(project_root))
+
+                from utils.alignment_statistics import (
+                    generate_coverage_summary_table,
+                    generate_sample_summary_table
+                )
+
+                sample_summary_file = work_dir / 'sample_summary.csv'
+                print('
+[INFO] Generating sample summary table...')
+                df_sample = generate_sample_summary_table(work_dir, config, sample_summary_file)
+                print(f'[OK] Sample summary table written to: {sample_summary_file}')
+                print(f'     {len(df_sample)} records written (including UMI metrics)')
+
+                print('
+[INFO] Generating coverage summary table...')
+                df = generate_coverage_summary_table(work_dir, config, summary_file)
+                print(f'[OK] Coverage summary table written to: {summary_file}')
+                print(f'     {len(df)} records written')
+            except Exception as e:
+                print(f'[WARN] Failed to generate summary tables: {e}', file=sys.stderr)
+                import traceback
+                if config.get('global', {}).get('verbose', False):
+                    traceback.print_exc()
+
+
+def run_sample(sample_name, config, dry_run):
+    """Run the analysis workflow for one sample and return whether it succeeded."""
+    try:
+        mode = config['alignment']['mode']
+        if mode == 'star':
+            from pipelines.star_pipeline import run_star_pipeline
+            run_star_pipeline(sample_name, config, dry_run)
+            return True
+        else:
+            raise ValueError(f"Unknown alignment mode: {mode}")
+    except Exception as e:
+        print(f"
+[ERROR] Sample '{sample_name}' failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+if __name__ == '__main__':
+    main()
