@@ -126,17 +126,35 @@ class BaseCounter:
         # Validate input files
         self._validate_files()
 
-    def _get_strand_candidate_base(self, ref_base: str, strand: str) -> str:
-        """Return the target reference base used for candidate-site filtering in strand-separated mode.
+    def _get_rna_ref_base(self, ref_base: str, strand: str) -> str:
+        """Return the RNA-oriented reference base for a genomic strand label.
 
-        To stay consistent with the BACS pseudouridine site definition:
-        - the `+` strand uses the original FASTA base directly
-        - the `-` strand uses the complement of the original FASTA base
+        In strand-separated mode, `strand` is reported in RNA orientation:
+        - `+`: RNA sequence follows the FASTA forward strand.
+        - `-`: RNA sequence follows the FASTA reverse-complement strand.
         """
         ref_base = ref_base.upper()
         if strand == "-":
             return self.comp.get(ref_base, "N")
         return ref_base
+
+    def _read_base_to_rna_base(self, read_base: str) -> str:
+        """Convert a read-oriented cDNA base to RNA base.
+
+        For reverse-stranded RNA-seq libraries, sequenced cDNA bases are complements
+        of original RNA bases. Therefore RNA-base counts are obtained by complementing
+        read-oriented bases before accumulation.
+        """
+        return self.comp.get(read_base.upper(), "N")
+
+    def _get_rna_strand(self, aln) -> str:
+        """Map alignment orientation to RNA strand.
+
+        For reverse-stranded libraries:
+        - reverse alignments (is_reverse=True) originate from RNA `+`
+        - forward alignments (is_reverse=False) originate from RNA `-`
+        """
+        return "+" if aln.is_reverse else "-"
 
     def _get_output_ref_base(self, ref_base: str) -> str:
         """Return the reference base written to the output `ref` column.
@@ -331,12 +349,14 @@ class BaseCounter:
                             counts[base] += 1
                             depth += 1
                         else:
-                            if aln.is_reverse:
-                                counts_minus[base] += 1
-                                depth_minus += 1
-                            else:
-                                counts_plus[base] += 1
+                            rna_base = self._read_base_to_rna_base(base)
+                            rna_strand = self._get_rna_strand(aln)
+                            if rna_strand == "+":
+                                counts_plus[rna_base] += 1
                                 depth_plus += 1
+                            else:
+                                counts_minus[rna_base] += 1
+                                depth_minus += 1
                     
                     # Write results according to the selected mode
                     if self.merge_strands:
@@ -358,7 +378,7 @@ class BaseCounter:
                     else:
                         # Positive strand
                         if depth_plus >= self.min_depth:
-                            candidate_base_plus = self._get_strand_candidate_base(ref_base, "+")
+                            candidate_base_plus = self._get_rna_ref_base(ref_base, "+")
                             output_ref_plus = self._get_output_ref_base(ref_base)
                             if not self.config.should_include(candidate_base_plus):
                                 filtered_positions += 1
@@ -380,7 +400,7 @@ class BaseCounter:
                         
                         # Negative strand
                         if depth_minus >= self.min_depth:
-                            candidate_base_minus = self._get_strand_candidate_base(ref_base, "-")
+                            candidate_base_minus = self._get_rna_ref_base(ref_base, "-")
                             output_ref_minus = self._get_output_ref_base(ref_base)
                             if not self.config.should_include(candidate_base_minus):
                                 filtered_positions += 1
@@ -510,12 +530,14 @@ class BaseCounter:
                         counts[base] += 1
                         depth += 1
                     else:
-                        if aln.is_reverse:
-                            counts_minus[base] += 1
-                            depth_minus += 1
-                        else:
-                            counts_plus[base] += 1
+                        rna_base = self._read_base_to_rna_base(base)
+                        rna_strand = self._get_rna_strand(aln)
+                        if rna_strand == "+":
+                            counts_plus[rna_base] += 1
                             depth_plus += 1
+                        else:
+                            counts_minus[rna_base] += 1
+                            depth_minus += 1
 
                 # Emit results according to the selected mode with depth and frequency filters
                 if self.merge_strands:
@@ -540,7 +562,7 @@ class BaseCounter:
 
                     # Positive-strand depth and frequency filtering
                     if depth_plus >= self.min_depth:
-                        candidate_base_plus = self._get_strand_candidate_base(ref_base, "+")
+                        candidate_base_plus = self._get_rna_ref_base(ref_base, "+")
                         output_ref_plus = self._get_output_ref_base(ref_base)
                         if not self.config.should_include(candidate_base_plus):
                             filtered_positions += 1
@@ -560,7 +582,7 @@ class BaseCounter:
 
                     # Negative-strand depth and frequency filtering
                     if depth_minus >= self.min_depth:
-                        candidate_base_minus = self._get_strand_candidate_base(ref_base, "-")
+                        candidate_base_minus = self._get_rna_ref_base(ref_base, "-")
                         output_ref_minus = self._get_output_ref_base(ref_base)
                         if not self.config.should_include(candidate_base_minus):
                             filtered_positions += 1

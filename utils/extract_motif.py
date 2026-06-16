@@ -30,7 +30,7 @@ def reverse_complement(seq: str) -> str:
 def get_rna_ref_base(ref_base: str, strand: Optional[str]) -> str:
     """Convert a FASTA-space reference base into its RNA-oriented reference base."""
     ref_base = str(ref_base).upper()
-    if strand == '+':
+    if strand == '-':
         return COMP_BASE.get(ref_base, 'N')
     return ref_base
 
@@ -51,8 +51,8 @@ def add_motif_column(
     -----
     - `pos` is treated as a 1-based genomic coordinate.
     - If a `strand` column exists, motifs are reported in RNA orientation:
-      `+` rows use the reverse complement of the reference window, while `-` rows
-      use the reference window directly.
+      `+` rows use the reference forward window directly, while `-` rows use
+      the reverse complement.
     - If the window extends outside sequence boundaries or an error occurs, `N`
       padding is used.
     """
@@ -101,7 +101,7 @@ def add_motif_column(
             seq = fasta.fetch(str(chrom), start, end).upper()
             if len(seq) != motif_len:
                 seq = seq.ljust(motif_len, 'N')
-            if strand == '+':
+            if strand == '-':
                 return reverse_complement(seq)
             return seq
         except (KeyError, ValueError, OSError):

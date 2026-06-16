@@ -74,8 +74,7 @@ def validate_config(config, allow_missing_files=False):
     if config.get('umi_dedup', {}).get('enable', False):
         print('[INFO] UMI deduplication is enabled; make sure FASTQ files were preprocessed with umi_tools extract')
 
-    print('[OK] Configuration validation passed
-')
+    print('[OK] Configuration validation passed')
 
 
 __all__ = ['validate_config']
